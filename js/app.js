@@ -387,6 +387,7 @@ document.getElementById('form-script').addEventListener('submit', e => {
   e.preventDefault();
   const items = store.get('scripts');
   const editId = document.getElementById('script-edit-id').value;
+  const existing = editId ? items.find(i => i.id === editId) : null;
   const item = {
     id: editId || uid(),
     title: document.getElementById('script-title').value.trim(),
@@ -397,7 +398,9 @@ document.getElementById('form-script').addEventListener('submit', e => {
     body: document.getElementById('script-body').value.trim(),
     cta: document.getElementById('script-cta').value.trim(),
     angle: document.getElementById('script-angle').value.trim(),
-    createdAt: editId ? (items.find(i => i.id === editId)?.createdAt || Date.now()) : Date.now(),
+    createdAt: existing?.createdAt || Date.now(),
+    contentImages: existing?.contentImages || [],
+    contentStatus: 'generating',
   };
   if (editId) {
     items[items.findIndex(i => i.id === editId)] = item;
@@ -407,7 +410,43 @@ document.getElementById('form-script').addEventListener('submit', e => {
   store.set('scripts', items);
   clearScriptForm();
   renderScripts();
+
+  // Kick off NanoBanana content generation in the background
+  generateScriptContent(item.id);
 });
+
+async function generateScriptContent(scriptId) {
+  const script = store.get('scripts').find(s => s.id === scriptId);
+  if (!script) return;
+  const persona = store.get('personas').find(p => p.id === script.personaId);
+
+  try {
+    const res = await fetch(`${API_BASE}/api/generate-script-content`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ script, persona }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || 'Generation failed.');
+
+    updateScript(scriptId, {
+      contentImages: data.images.map(i => API_BASE + i.url),
+      contentStatus: 'ready',
+      contentError: null,
+    });
+  } catch (err) {
+    updateScript(scriptId, { contentStatus: 'failed', contentError: err.message });
+  }
+}
+
+function updateScript(scriptId, patch) {
+  const items = store.get('scripts');
+  const idx = items.findIndex(s => s.id === scriptId);
+  if (idx === -1) return;
+  items[idx] = { ...items[idx], ...patch };
+  store.set('scripts', items);
+  renderScripts();
+}
 
 function clearScriptForm() {
   document.getElementById('script-edit-id').value = '';
@@ -427,7 +466,7 @@ function renderScripts() {
   el.innerHTML = items.slice().reverse().map(s => {
     const persona = personas.find(p => p.id === s.personaId);
     return `
-      <div class="card">
+      <div class="card script-card">
         <div class="card-body">
           <div class="card-title">${s.title}</div>
           <div class="script-card-hook">"${s.hook}"</div>
@@ -435,14 +474,43 @@ function renderScripts() {
             ${platformTag(s.platform)}
             ${persona ? `<span class="tag">${persona.name}</span>` : ''}
           </div>
+          ${renderScriptContent(s)}
         </div>
         <div class="card-actions">
-          <button class="btn-icon" onclick="editScript('${s.id}')">✏️</button>
-          <button class="btn-icon danger" onclick="deleteScript('${s.id}')">🗑</button>
+          <button class="btn-icon" onclick="editScript('${s.id}')" title="Edit">✏️</button>
+          <button class="btn-icon" onclick="regenerateScriptContent('${s.id}')" title="Regenerate content">🎨</button>
+          <button class="btn-icon danger" onclick="deleteScript('${s.id}')" title="Delete">🗑</button>
         </div>
       </div>`;
   }).join('');
 }
+
+function renderScriptContent(s) {
+  if (s.contentStatus === 'generating') {
+    return `<div class="script-content-status generating">Generating scenes with NanoBanana...</div>`;
+  }
+  if (s.contentStatus === 'failed') {
+    return `<div class="script-content-status failed">Generation failed: ${s.contentError || 'unknown error'}</div>`;
+  }
+  if (s.contentImages && s.contentImages.length) {
+    return `
+      <div class="script-content-gallery">
+        ${s.contentImages.map((url, i) => `
+          <a href="${url}" target="_blank" class="script-scene" title="Scene ${i+1} — click to open full size">
+            <img src="${url}" alt="Scene ${i+1}" loading="lazy" />
+            <span class="scene-num">${i+1}</span>
+          </a>
+        `).join('')}
+      </div>`;
+  }
+  return '';
+}
+
+window.regenerateScriptContent = (id) => {
+  if (!confirm('Regenerate all 4 scene images? This costs ~$0.16 in API credits.')) return;
+  updateScript(id, { contentStatus: 'generating', contentError: null });
+  generateScriptContent(id);
+};
 
 window.editScript = (id) => {
   const item = store.get('scripts').find(s => s.id === id);

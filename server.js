@@ -9,7 +9,9 @@ const fetch = require('node-fetch');
 const puppeteer = require('puppeteer');
 
 const TEMP_DIR = path.join(__dirname, 'temp');
+const GENERATED_DIR = path.join(__dirname, 'generated');
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
+if (!fs.existsSync(GENERATED_DIR)) fs.mkdirSync(GENERATED_DIR);
 
 const hashOf = (buf) => crypto.createHash('sha1').update(buf).digest('hex');
 
@@ -233,6 +235,117 @@ app.post('/api/generate-image', async (req, res) => {
     res.json({ success: true, image: `data:image/png;base64,${b64}` });
   } catch (err) {
     console.error('[generate-image]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ══════════════════════════════════════════
+// Helper: call Imagen with a prompt, return PNG buffer
+// ══════════════════════════════════════════
+async function generateImagenImage(prompt, aspectRatio = '9:16') {
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${process.env.NANOBANANA_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        instances: [{ prompt }],
+        parameters: { sampleCount: 1, aspectRatio },
+      }),
+    }
+  );
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error?.message || `Imagen API error ${response.status}`);
+  const b64 = data.predictions?.[0]?.bytesBase64Encoded;
+  if (!b64) throw new Error('Imagen returned no image data.');
+  return Buffer.from(b64, 'base64');
+}
+
+// ══════════════════════════════════════════
+// POST /api/generate-script-content
+// 1. Ask Claude for 4 scene prompts based on script
+// 2. Generate each scene with Imagen
+// 3. Save PNGs to /generated and return URLs
+// ══════════════════════════════════════════
+app.post('/api/generate-script-content', async (req, res) => {
+  const { script, persona } = req.body;
+  if (!script || !script.id) return res.status(400).json({ error: 'Script data required.' });
+
+  try {
+    console.log(`\n[generate-content] script ${script.id}`);
+    const personaDesc = persona?.face || 'a young, authentic social media influencer';
+    const personaName = persona?.name || 'the creator';
+    const personaVibe = persona?.vibe || '';
+
+    console.log('[1/2] Asking Claude for scene prompts...');
+    const sceneMsg = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1024,
+      messages: [{
+        role: 'user',
+        content: `You are designing a 4-scene vertical visual storyboard for a TikTok/Instagram ad for HabitAI (a habit tracker mobile app). The 4 scenes should tell the ad story beat by beat.
+
+Script:
+- Hook: ${script.hook || '(none)'}
+- Body / Structure: ${script.body || '(none)'}
+- Call to action: ${script.cta || '(none)'}
+- Angle / remix notes: ${script.angle || '(none)'}
+
+Persona name: ${personaName}
+Persona vibe: ${personaVibe}
+Persona appearance: ${personaDesc}
+
+Generate EXACTLY 4 photorealistic image prompts in order:
+  Scene 1 — visualise the HOOK
+  Scene 2 — visualise the PROBLEM / tension
+  Scene 3 — visualise the SOLUTION (the persona using HabitAI on their phone)
+  Scene 4 — visualise the CTA / payoff
+
+Each prompt MUST:
+- Begin with the persona's full appearance description so faces stay consistent across scenes
+- Describe the camera angle, expression, environment, lighting
+- Look like a real iPhone-shot moment, vertical 9:16 portrait
+- Avoid any text overlays in the image itself
+
+Return ONLY a JSON array of exactly 4 prompt strings, no markdown:
+["scene 1 prompt", "scene 2 prompt", "scene 3 prompt", "scene 4 prompt"]`,
+      }],
+    });
+
+    let raw = (sceneMsg.content[0]?.text || '').trim();
+    raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const arrMatch = raw.match(/\[[\s\S]*\]/);
+    if (arrMatch) raw = arrMatch[0];
+
+    let prompts;
+    try { prompts = JSON.parse(raw); } catch (e) {
+      console.error('[generate-content] could not parse prompts:', raw.slice(0, 300));
+      throw new Error('Could not parse scene prompts from Claude.');
+    }
+    if (!Array.isArray(prompts) || !prompts.length) throw new Error('Scene prompt list was empty.');
+
+    console.log(`[2/2] Generating ${prompts.length} scene image(s)...`);
+    const images = [];
+    let i = 0;
+    for (const prompt of prompts) {
+      i++;
+      try {
+        const buf = await generateImagenImage(prompt, '9:16');
+        const filename = `script_${script.id}_scene_${i}_${Date.now()}.png`;
+        fs.writeFileSync(path.join(GENERATED_DIR, filename), buf);
+        images.push({ url: `/generated/${filename}`, prompt });
+        console.log(`  ✓ scene ${i}`);
+      } catch (e) {
+        console.log(`  ✗ scene ${i} failed: ${e.message}`);
+      }
+    }
+
+    if (!images.length) throw new Error('All scene generations failed. Check your Imagen API quota.');
+
+    console.log(`[generate-content] done — ${images.length} image(s) saved.\n`);
+    res.json({ success: true, images });
+  } catch (err) {
+    console.error('[generate-content]', err.message);
     res.status(500).json({ error: err.message });
   }
 });

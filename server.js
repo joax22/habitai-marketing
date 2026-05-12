@@ -43,40 +43,58 @@ app.post('/api/analyze', async (req, res) => {
   try {
     // ── 1. Download video ──
     const outputTemplate = path.join(TEMP_DIR, `${sessionId}.%(ext)s`).replace(/\\/g, '/');
+    console.log('[1/3] Downloading post...');
     try {
       execSync(
-        `${YTDLP} -o "${outputTemplate}" --format "best[ext=mp4]/best[ext=webm]/best" --no-playlist "${url}"`,
+        `${YTDLP} -o "${outputTemplate}" --no-playlist "${url}"`,
         { timeout: 90000, stdio: 'pipe' }
       );
     } catch (e) {
-      throw new Error('Could not download video. Check the URL is valid and publicly accessible.');
-    }
-
-    // Find the downloaded file
-    const downloaded = fs.readdirSync(TEMP_DIR).find(f => f.startsWith(sessionId));
-    if (!downloaded) throw new Error('Download completed but file not found.');
-    const videoPath = path.join(TEMP_DIR, downloaded).replace(/\\/g, '/');
-
-    // ── 2. Extract frames with ffmpeg ──
-    const timestamps = [0, 1, 3, 6, 10];
-    for (const t of timestamps) {
-      const framePath = path.join(TEMP_DIR, `${sessionId}_f${t}.jpg`).replace(/\\/g, '/');
-      try {
-        execSync(
-          `ffmpeg -y -i "${videoPath}" -ss ${t} -frames:v 1 -q:v 2 "${framePath}"`,
-          { timeout: 15000, stdio: 'pipe' }
-        );
-        if (fs.existsSync(framePath)) frames.push(framePath);
-      } catch (_) {
-        // Frame timestamp may exceed video length — skip silently
+      const detail = e.stderr ? e.stderr.toString() : e.message;
+      if (detail.includes('Unsupported URL') || detail.includes('generic')) {
+        throw new Error('Could not download this post. Make sure yt-dlp.exe is up to date and the post is public.');
       }
+      throw new Error(`Download failed: ${detail.slice(0, 200)}`);
+    }
+    console.log('[1/3] Download complete.');
+
+    // Find all downloaded files for this session
+    const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.webp'];
+    const VIDEO_EXTS = ['.mp4', '.webm', '.mov', '.mkv', '.avi'];
+    const allDownloaded = fs.readdirSync(TEMP_DIR).filter(f => f.startsWith(sessionId));
+    const imageFiles = allDownloaded.filter(f => IMAGE_EXTS.some(e => f.toLowerCase().endsWith(e)));
+    const videoFiles = allDownloaded.filter(f => VIDEO_EXTS.some(e => f.toLowerCase().endsWith(e)));
+
+    if (!allDownloaded.length) throw new Error('Download completed but no files found.');
+
+    // ── 2a. Photo slideshow — use images directly ──
+    if (imageFiles.length && !videoFiles.length) {
+      console.log(`[2/3] Photo post — using ${imageFiles.length} image(s) directly.`);
+      frames.push(...imageFiles.map(f => path.join(TEMP_DIR, f)));
+
+    // ── 2b. Video — extract frames with ffmpeg ──
+    } else if (videoFiles.length) {
+      console.log('[2/3] Video post — extracting frames with ffmpeg...');
+      const videoPath = path.join(TEMP_DIR, videoFiles[0]).replace(/\\/g, '/');
+      const timestamps = [0, 1, 3, 6, 10];
+      for (const t of timestamps) {
+        const framePath = path.join(TEMP_DIR, `${sessionId}_f${t}.jpg`).replace(/\\/g, '/');
+        try {
+          execSync(
+            `ffmpeg -y -i "${videoPath}" -ss ${t} -frames:v 1 -q:v 2 "${framePath}"`,
+            { timeout: 15000, stdio: 'pipe' }
+          );
+          if (fs.existsSync(framePath)) frames.push(framePath);
+        } catch (_) { /* frame past video end — skip */ }
+      }
+      if (!frames.length) throw new Error('Could not extract frames. Is ffmpeg installed? Run: winget install ffmpeg');
+      console.log(`[2/3] Extracted ${frames.length} frames.`);
+    } else {
+      throw new Error('Downloaded files were not recognised as images or video.');
     }
 
-    if (!frames.length) {
-      throw new Error('Could not extract frames. Make sure ffmpeg is installed.');
-    }
-
-    // ── 3. Send frames to Claude ──
+    // ── 3. Send to Claude ──
+    console.log('[3/3] Sending to Claude for analysis...');
     const imageBlocks = frames.map(fp => ({
       type: 'image',
       source: {

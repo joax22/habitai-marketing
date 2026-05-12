@@ -1,3 +1,85 @@
+const API_BASE = 'http://localhost:3001';
+
+// ── Analyze video with Claude ──
+document.getElementById('btn-analyze-video').addEventListener('click', async () => {
+  const url = document.getElementById('insp-url').value.trim();
+  const errorEl = document.getElementById('analyze-error');
+  const btn = document.getElementById('btn-analyze-video');
+  const label = btn.querySelector('.analyze-label');
+  const spinner = btn.querySelector('.analyze-spinner');
+
+  errorEl.classList.add('hidden');
+  if (!url) { showFieldError(errorEl, 'Paste a TikTok or Instagram URL first.'); return; }
+
+  btn.disabled = true;
+  label.classList.add('hidden');
+  spinner.classList.remove('hidden');
+
+  try {
+    const res = await fetch(`${API_BASE}/api/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || 'Analysis failed.');
+
+    if (data.hook)      document.getElementById('insp-hook').value = data.hook;
+    if (data.structure) document.getElementById('insp-structure').value = data.structure;
+    if (data.why)       document.getElementById('insp-why').value = data.why;
+    if (data.tags)      document.getElementById('insp-tags').value = data.tags;
+  } catch (err) {
+    showFieldError(errorEl, err.message);
+  } finally {
+    btn.disabled = false;
+    label.classList.remove('hidden');
+    spinner.classList.add('hidden');
+  }
+});
+
+// ── Generate persona image with NanoBanana ──
+document.getElementById('btn-generate-image').addEventListener('click', async () => {
+  const description = document.getElementById('persona-face').value.trim();
+  const name = document.getElementById('persona-name').value.trim();
+  const niche = document.getElementById('persona-niche').value.trim();
+  const errorEl = document.getElementById('generate-image-error');
+  const btn = document.getElementById('btn-generate-image');
+  const label = btn.querySelector('.analyze-label');
+  const spinner = btn.querySelector('.analyze-spinner');
+
+  errorEl.classList.add('hidden');
+  if (!description) { showFieldError(errorEl, 'Add a face description first.'); return; }
+
+  btn.disabled = true;
+  label.classList.add('hidden');
+  spinner.classList.remove('hidden');
+
+  try {
+    const res = await fetch(`${API_BASE}/api/generate-image`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description, name, niche }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || 'Image generation failed.');
+
+    document.getElementById('persona-image-img').src = data.image;
+    document.getElementById('persona-image-data').value = data.image;
+    document.getElementById('persona-image-preview').classList.remove('hidden');
+  } catch (err) {
+    showFieldError(errorEl, err.message);
+  } finally {
+    btn.disabled = false;
+    label.classList.remove('hidden');
+    spinner.classList.add('hidden');
+  }
+});
+
+function showFieldError(el, msg) {
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
 // ── Storage helpers ──
 const store = {
   get: (key) => JSON.parse(localStorage.getItem(key) || '[]'),
@@ -169,6 +251,9 @@ document.getElementById('btn-add-persona').addEventListener('click', () => {
   document.getElementById('persona-edit-id').value = '';
   document.getElementById('form-persona').reset();
   document.querySelectorAll('#modal-persona input[type="checkbox"]').forEach(cb => cb.checked = false);
+  document.getElementById('persona-image-preview').classList.add('hidden');
+  document.getElementById('persona-image-data').value = '';
+  document.getElementById('persona-image-img').src = '';
   openModal('modal-persona');
 });
 
@@ -186,6 +271,7 @@ document.getElementById('form-persona').addEventListener('submit', e => {
     audience: document.getElementById('persona-audience').value.trim(),
     platforms,
     notes: document.getElementById('persona-notes').value.trim(),
+    image: document.getElementById('persona-image-data').value || '',
     createdAt: editId ? (items.find(i => i.id === editId)?.createdAt || Date.now()) : Date.now(),
   };
   if (editId) {
@@ -208,7 +294,10 @@ function renderPersonas() {
   }
   el.innerHTML = items.map(p => `
     <div class="persona-card">
-      <div class="persona-avatar">${p.name.charAt(0).toUpperCase()}</div>
+      ${p.image
+        ? `<img class="persona-img" src="${p.image}" alt="${p.name}" />`
+        : `<div class="persona-avatar">${p.name.charAt(0).toUpperCase()}</div>`
+      }
       <div class="persona-name">${p.name}</div>
       <div class="persona-niche">${p.niche}</div>
       ${p.vibe ? `<div class="persona-vibe">${p.vibe}</div>` : ''}
@@ -236,6 +325,14 @@ window.editPersona = (id) => {
   document.querySelectorAll('#modal-persona .checkbox-group input').forEach(cb => {
     cb.checked = item.platforms.includes(cb.value);
   });
+  if (item.image) {
+    document.getElementById('persona-image-img').src = item.image;
+    document.getElementById('persona-image-data').value = item.image;
+    document.getElementById('persona-image-preview').classList.remove('hidden');
+  } else {
+    document.getElementById('persona-image-preview').classList.add('hidden');
+    document.getElementById('persona-image-data').value = '';
+  }
   openModal('modal-persona');
 };
 

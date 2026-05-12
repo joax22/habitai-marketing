@@ -160,8 +160,15 @@
                 <textarea id="insp-why" rows="3" placeholder="Strong retention? Relatable pain point? Great CTA?"></textarea>
               </div>
               <div class="form-group">
-                <label>URL / Reference (optional)</label>
-                <input type="text" id="insp-url" placeholder="Paste URL or describe it" />
+                <label>Video URL</label>
+                <div class="url-row">
+                  <input type="text" id="insp-url" placeholder="Paste TikTok or Instagram Reel URL" />
+                  <button type="button" class="btn-analyze" id="btn-analyze-video">
+                    <span class="analyze-label">Analyze with AI</span>
+                    <span class="analyze-spinner hidden">Analyzing...</span>
+                  </button>
+                </div>
+                <div id="analyze-error" class="field-error hidden"></div>
               </div>
               <div class="form-group">
                 <label>Tags</label>
@@ -214,6 +221,16 @@
               <div class="form-group">
                 <label>Face Description (for AI generation)</label>
                 <textarea id="persona-face" rows="3" placeholder="Describe appearance: age range, style, expression, hair, background aesthetic..."></textarea>
+                <button type="button" class="btn-analyze" id="btn-generate-image" style="margin-top:8px">
+                  <span class="analyze-label">Generate Image with NanoBanana</span>
+                  <span class="analyze-spinner hidden">Generating...</span>
+                </button>
+                <div id="generate-image-error" class="field-error hidden"></div>
+              </div>
+              <div id="persona-image-preview" class="hidden">
+                <label class="form-label-small">Generated Image</label>
+                <img id="persona-image-img" src="" alt="Generated persona" class="persona-preview-img" />
+                <input type="hidden" id="persona-image-data" value="" />
               </div>
               <div class="form-group">
                 <label>Target Audience</label>

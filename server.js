@@ -44,17 +44,30 @@ app.post('/api/analyze', async (req, res) => {
     // ── 1. Download video ──
     const outputTemplate = path.join(TEMP_DIR, `${sessionId}.%(ext)s`).replace(/\\/g, '/');
     console.log('[1/3] Downloading post...');
-    try {
-      execSync(
-        `${YTDLP} -o "${outputTemplate}" --no-playlist "${url}"`,
-        { timeout: 90000, stdio: 'pipe' }
-      );
-    } catch (e) {
-      const detail = e.stderr ? e.stderr.toString() : e.message;
-      if (detail.includes('Unsupported URL') || detail.includes('generic')) {
-        throw new Error('Could not download this post. Make sure yt-dlp.exe is up to date and the post is public.');
+    const browsers = ['chrome', 'edge', 'firefox'];
+    let downloaded = false;
+    let lastError = '';
+
+    // Try without cookies first, then retry with each browser's cookies
+    const attempts = [null, ...browsers];
+    for (const browser of attempts) {
+      const cookieFlag = browser ? `--cookies-from-browser ${browser}` : '';
+      try {
+        execSync(
+          `${YTDLP} -o "${outputTemplate}" --no-playlist ${cookieFlag} "${url}"`,
+          { timeout: 90000, stdio: 'pipe' }
+        );
+        downloaded = true;
+        if (browser) console.log(`[1/3] Downloaded using ${browser} cookies.`);
+        break;
+      } catch (e) {
+        lastError = e.stderr ? e.stderr.toString() : e.message;
+        console.log(`[1/3] Attempt failed${browser ? ` (${browser})` : ''}: ${lastError.slice(0, 100)}`);
       }
-      throw new Error(`Download failed: ${detail.slice(0, 200)}`);
+    }
+
+    if (!downloaded) {
+      throw new Error(`Could not download post after all attempts. Make sure yt-dlp.exe is up to date and you are logged into TikTok/Instagram in Chrome or Edge.\n\nDetails: ${lastError.slice(0, 300)}`);
     }
     console.log('[1/3] Download complete.');
 

@@ -362,6 +362,27 @@ function populateScriptSelects() {
   iSel.value = curI;
 }
 
+// Auto-fill script fields when an inspiration is chosen
+document.getElementById('script-inspiration').addEventListener('change', (e) => {
+  const id = e.target.value;
+  if (!id) return;
+  const insp = store.get('inspirations').find(i => i.id === id);
+  if (!insp) return;
+
+  document.getElementById('script-hook').value = insp.hook || '';
+  document.getElementById('script-body').value = insp.structure || '';
+  document.getElementById('script-cta').value = 'Download HabitAI free — link in bio';
+  document.getElementById('script-angle').value = insp.why
+    ? `Original works because: ${insp.why}\n\nRemix for HabitAI: `
+    : '';
+
+  // Match the inspiration's platform if the script platform select supports it
+  const platformSel = document.getElementById('script-platform');
+  if (insp.platform && [...platformSel.options].some(o => o.value === insp.platform)) {
+    platformSel.value = insp.platform;
+  }
+});
+
 document.getElementById('form-script').addEventListener('submit', e => {
   e.preventDefault();
   const items = store.get('scripts');

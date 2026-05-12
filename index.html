@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HabitAI — Marketing System</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-dot"></span>
+        <span class="brand-name">HabitAI <span class="brand-sub">Ads</span></span>
+      </div>
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-view="dashboard">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          Dashboard
+        </button>
+        <button class="nav-item" data-view="inspiration">
+          <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          Inspiration Vault
+        </button>
+        <button class="nav-item" data-view="personas">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          Personas
+        </button>
+        <button class="nav-item" data-view="scripts">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          Script Builder
+        </button>
+        <button class="nav-item" data-view="pipeline">
+          <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          Pipeline
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <span>v1.0.0</span>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="main">
+      <!-- DASHBOARD -->
+      <section class="view active" id="view-dashboard">
+        <div class="view-header">
+          <h1>Dashboard</h1>
+          <p class="view-sub">Your HabitAI content engine at a glance.</p>
+        </div>
+        <div class="stats-grid" id="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Inspirations</div>
+            <div class="stat-value" id="stat-inspirations">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Personas</div>
+            <div class="stat-value" id="stat-personas">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Scripts</div>
+            <div class="stat-value" id="stat-scripts">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">In Pipeline</div>
+            <div class="stat-value" id="stat-pipeline">0</div>
+          </div>
+        </div>
+
+        <div class="workflow-steps">
+          <h2>Your Content Workflow</h2>
+          <div class="steps">
+            <div class="step">
+              <div class="step-num">1</div>
+              <div class="step-body">
+                <div class="step-title">Find Proven Winners</div>
+                <div class="step-desc">Save viral TikToks, Reels & Shorts to your Inspiration Vault.</div>
+              </div>
+            </div>
+            <div class="step-arrow">→</div>
+            <div class="step">
+              <div class="step-num">2</div>
+              <div class="step-body">
+                <div class="step-title">Build Your Personas</div>
+                <div class="step-desc">Create unique AI influencer profiles with different niches & vibes.</div>
+              </div>
+            </div>
+            <div class="step-arrow">→</div>
+            <div class="step">
+              <div class="step-num">3</div>
+              <div class="step-body">
+                <div class="step-title">Remix & Script</div>
+                <div class="step-desc">Combine an inspiration + persona into a HabitAI ad script.</div>
+              </div>
+            </div>
+            <div class="step-arrow">→</div>
+            <div class="step">
+              <div class="step-num">4</div>
+              <div class="step-body">
+                <div class="step-title">Track & Ship</div>
+                <div class="step-desc">Move content through your pipeline until it's live.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="recent-section">
+          <h2>Recent Scripts</h2>
+          <div id="recent-scripts-list" class="card-list empty-state">
+            <span>No scripts yet. Start in Script Builder.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- INSPIRATION VAULT -->
+      <section class="view" id="view-inspiration">
+        <div class="view-header">
+          <h1>Inspiration Vault</h1>
+          <p class="view-sub">Log viral content that proves a format works. Study the hook, structure, and engagement.</p>
+        </div>
+        <button class="btn-primary" id="btn-add-inspiration">+ Add Inspiration</button>
+
+        <div id="inspiration-list" class="card-list">
+          <div class="empty-state"><span>No inspirations yet. Add one above.</span></div>
+        </div>
+
+        <!-- Add Inspiration Modal -->
+        <div class="modal-backdrop hidden" id="modal-inspiration">
+          <div class="modal">
+            <div class="modal-header">
+              <h3 id="inspiration-modal-title">Add Inspiration</h3>
+              <button class="modal-close" data-modal="modal-inspiration">&times;</button>
+            </div>
+            <form id="form-inspiration">
+              <input type="hidden" id="inspiration-edit-id" value="" />
+              <div class="form-group">
+                <label>Platform</label>
+                <select id="insp-platform">
+                  <option value="TikTok">TikTok</option>
+                  <option value="Instagram Reels">Instagram Reels</option>
+                  <option value="YouTube Shorts">YouTube Shorts</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Creator / Account</label>
+                <input type="text" id="insp-creator" placeholder="@username or channel name" />
+              </div>
+              <div class="form-group">
+                <label>Hook (first 2–3 seconds)</label>
+                <input type="text" id="insp-hook" placeholder="What did they open with?" required />
+              </div>
+              <div class="form-group">
+                <label>Structure / Format</label>
+                <textarea id="insp-structure" rows="3" placeholder="How was the video structured? (e.g. problem → agitation → solution → CTA)"></textarea>
+              </div>
+              <div class="form-group">
+                <label>Why It Works</label>
+                <textarea id="insp-why" rows="3" placeholder="Strong retention? Relatable pain point? Great CTA?"></textarea>
+              </div>
+              <div class="form-group">
+                <label>URL / Reference (optional)</label>
+                <input type="text" id="insp-url" placeholder="Paste URL or describe it" />
+              </div>
+              <div class="form-group">
+                <label>Tags</label>
+                <input type="text" id="insp-tags" placeholder="e.g. productivity, morning routine, transformation" />
+              </div>
+              <div class="form-actions">
+                <button type="button" class="btn-secondary" data-modal="modal-inspiration">Cancel</button>
+                <button type="submit" class="btn-primary">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- PERSONAS -->
+      <section class="view" id="view-personas">
+        <div class="view-header">
+          <h1>Personas</h1>
+          <p class="view-sub">Each AI influencer needs a unique face, vibe, and niche. No face reuse — no visual fatigue.</p>
+        </div>
+        <button class="btn-primary" id="btn-add-persona">+ New Persona</button>
+
+        <div id="persona-list" class="persona-grid">
+          <div class="empty-state"><span>No personas yet. Create your first AI influencer.</span></div>
+        </div>
+
+        <!-- Add Persona Modal -->
+        <div class="modal-backdrop hidden" id="modal-persona">
+          <div class="modal">
+            <div class="modal-header">
+              <h3 id="persona-modal-title">New Persona</h3>
+              <button class="modal-close" data-modal="modal-persona">&times;</button>
+            </div>
+            <form id="form-persona">
+              <input type="hidden" id="persona-edit-id" value="" />
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Persona Name</label>
+                  <input type="text" id="persona-name" placeholder='e.g. "Alex"' required />
+                </div>
+                <div class="form-group">
+                  <label>Niche</label>
+                  <input type="text" id="persona-niche" placeholder="e.g. Productivity, Wellness, Fitness" required />
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Personality / Vibe</label>
+                <input type="text" id="persona-vibe" placeholder='e.g. "Calm, minimalist, speaks directly to camera"' />
+              </div>
+              <div class="form-group">
+                <label>Face Description (for AI generation)</label>
+                <textarea id="persona-face" rows="3" placeholder="Describe appearance: age range, style, expression, hair, background aesthetic..."></textarea>
+              </div>
+              <div class="form-group">
+                <label>Target Audience</label>
+                <input type="text" id="persona-audience" placeholder="e.g. 25–35 year olds who want to build routines" />
+              </div>
+              <div class="form-group">
+                <label>Platforms</label>
+                <div class="checkbox-group">
+                  <label><input type="checkbox" value="TikTok" /> TikTok</label>
+                  <label><input type="checkbox" value="Instagram Reels" /> Instagram Reels</label>
+                  <label><input type="checkbox" value="YouTube Shorts" /> YouTube Shorts</label>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Notes</label>
+                <textarea id="persona-notes" rows="2" placeholder="Anything else that defines this persona"></textarea>
+              </div>
+              <div class="form-actions">
+                <button type="button" class="btn-secondary" data-modal="modal-persona">Cancel</button>
+                <button type="submit" class="btn-primary">Save Persona</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCRIPT BUILDER -->
+      <section class="view" id="view-scripts">
+        <div class="view-header">
+          <h1>Script Builder</h1>
+          <p class="view-sub">Pick an inspiration + persona, remix the hook & structure for HabitAI.</p>
+        </div>
+        <div class="script-layout">
+          <div class="script-form-panel">
+            <form id="form-script">
+              <input type="hidden" id="script-edit-id" value="" />
+              <div class="form-group">
+                <label>Script Title</label>
+                <input type="text" id="script-title" placeholder="Give this script a name" required />
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Persona</label>
+                  <select id="script-persona">
+                    <option value="">— Select Persona —</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Platform</label>
+                  <select id="script-platform">
+                    <option value="TikTok">TikTok</option>
+                    <option value="Instagram Reels">Instagram Reels</option>
+                    <option value="YouTube Shorts">YouTube Shorts</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Inspiration Reference</label>
+                <select id="script-inspiration">
+                  <option value="">— Select Inspiration (optional) —</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Hook (0–3 sec)</label>
+                <input type="text" id="script-hook" placeholder="Open with something that stops the scroll" required />
+              </div>
+              <div class="form-group">
+                <label>Body / Structure</label>
+                <textarea id="script-body" rows="6" placeholder="Problem → Agitation → HabitAI Solution → Proof or social cue"></textarea>
+              </div>
+              <div class="form-group">
+                <label>Call to Action</label>
+                <input type="text" id="script-cta" placeholder='e.g. "Download HabitAI free — link in bio"' />
+              </div>
+              <div class="form-group">
+                <label>Angle / Remix Notes</label>
+                <textarea id="script-angle" rows="2" placeholder="How did you remix the original format for HabitAI?"></textarea>
+              </div>
+              <div class="form-actions">
+                <button type="button" class="btn-secondary" id="btn-clear-script">Clear</button>
+                <button type="submit" class="btn-primary">Save Script</button>
+              </div>
+            </form>
+          </div>
+          <div class="script-list-panel">
+            <div class="panel-header">
+              <h3>Saved Scripts</h3>
+            </div>
+            <div id="script-list" class="card-list">
+              <div class="empty-state"><span>No scripts yet.</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PIPELINE -->
+      <section class="view" id="view-pipeline">
+        <div class="view-header">
+          <h1>Content Pipeline</h1>
+          <p class="view-sub">Move each piece of content from script to live post.</p>
+        </div>
+        <button class="btn-primary" id="btn-add-pipeline">+ Add Content</button>
+
+        <div class="kanban" id="kanban-board">
+          <div class="kanban-col" data-stage="scripted">
+            <div class="kanban-col-header">Scripted</div>
+            <div class="kanban-col-body" id="stage-scripted"></div>
+          </div>
+          <div class="kanban-col" data-stage="in-production">
+            <div class="kanban-col-header">In Production</div>
+            <div class="kanban-col-body" id="stage-in-production"></div>
+          </div>
+          <div class="kanban-col" data-stage="ready">
+            <div class="kanban-col-header">Ready to Post</div>
+            <div class="kanban-col-body" id="stage-ready"></div>
+          </div>
+          <div class="kanban-col" data-stage="live">
+            <div class="kanban-col-header">Live</div>
+            <div class="kanban-col-body" id="stage-live"></div>
+          </div>
+        </div>
+
+        <!-- Add Pipeline Item Modal -->
+        <div class="modal-backdrop hidden" id="modal-pipeline">
+          <div class="modal">
+            <div class="modal-header">
+              <h3 id="pipeline-modal-title">Add Content</h3>
+              <button class="modal-close" data-modal="modal-pipeline">&times;</button>
+            </div>
+            <form id="form-pipeline">
+              <input type="hidden" id="pipeline-edit-id" value="" />
+              <div class="form-group">
+                <label>Content Title</label>
+                <input type="text" id="pipe-title" placeholder="Name this content piece" required />
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Persona</label>
+                  <select id="pipe-persona">
+                    <option value="">— Select Persona —</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Platform</label>
+                  <select id="pipe-platform">
+                    <option value="TikTok">TikTok</option>
+                    <option value="Instagram Reels">Instagram Reels</option>
+                    <option value="YouTube Shorts">YouTube Shorts</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Linked Script</label>
+                <select id="pipe-script">
+                  <option value="">— Select Script (optional) —</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Stage</label>
+                <select id="pipe-stage">
+                  <option value="scripted">Scripted</option>
+                  <option value="in-production">In Production</option>
+                  <option value="ready">Ready to Post</option>
+                  <option value="live">Live</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Notes</label>
+                <textarea id="pipe-notes" rows="2" placeholder="Any production notes or links"></textarea>
+              </div>
+              <div class="form-actions">
+                <button type="button" class="btn-secondary" data-modal="modal-pipeline">Cancel</button>
+                <button type="submit" class="btn-primary">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -14,6 +14,9 @@ app.use(express.static(__dirname));
 
 const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
 const TEMP_DIR = path.join(__dirname, 'temp');
+const YTDLP = fs.existsSync(path.join(__dirname, 'yt-dlp.exe'))
+  ? `"${path.join(__dirname, 'yt-dlp.exe')}"`
+  : 'yt-dlp';
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
 
 // ── Cleanup temp files for a given session ID ──
@@ -42,11 +45,11 @@ app.post('/api/analyze', async (req, res) => {
     const outputTemplate = path.join(TEMP_DIR, `${sessionId}.%(ext)s`).replace(/\\/g, '/');
     try {
       execSync(
-        `yt-dlp -o "${outputTemplate}" --format "best[ext=mp4]/best[ext=webm]/best" --no-playlist "${url}"`,
+        `${YTDLP} -o "${outputTemplate}" --format "best[ext=mp4]/best[ext=webm]/best" --no-playlist "${url}"`,
         { timeout: 90000, stdio: 'pipe' }
       );
     } catch (e) {
-      throw new Error('Could not download video. Make sure yt-dlp is installed and the URL is valid.');
+      throw new Error('Could not download video. Check the URL is valid and publicly accessible.');
     }
 
     // Find the downloaded file

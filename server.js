@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { execSync } = require('child_process');
+const { execSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
@@ -44,6 +44,7 @@ app.post('/api/analyze', async (req, res) => {
     // ── 1. Download video ──
     const outputTemplate = path.join(TEMP_DIR, `${sessionId}.%(ext)s`).replace(/\\/g, '/');
     console.log('[1/3] Downloading post...');
+    const ytdlpBin = path.join(__dirname, 'yt-dlp.exe');
     const browsers = ['chrome', 'edge', 'firefox'];
     let downloaded = false;
     let lastError = '';
@@ -51,23 +52,25 @@ app.post('/api/analyze', async (req, res) => {
     // Try without cookies first, then retry with each browser's cookies
     const attempts = [null, ...browsers];
     for (const browser of attempts) {
-      const cookieFlag = browser ? `--cookies-from-browser ${browser}` : '';
-      try {
-        execSync(
-          `${YTDLP} -o "${outputTemplate}" --no-playlist ${cookieFlag} "${url}"`,
-          { timeout: 90000, stdio: 'pipe' }
-        );
+      const args = ['-o', outputTemplate, '--no-playlist'];
+      if (browser) args.push('--cookies-from-browser', browser);
+      args.push(url);
+
+      const result = spawnSync(ytdlpBin, args, { timeout: 90000, encoding: 'utf8' });
+      const stderr = result.stderr || '';
+      const stdout = result.stdout || '';
+
+      if (result.status === 0) {
         downloaded = true;
         if (browser) console.log(`[1/3] Downloaded using ${browser} cookies.`);
         break;
-      } catch (e) {
-        lastError = e.stderr ? e.stderr.toString() : e.message;
-        console.log(`[1/3] Attempt failed${browser ? ` (${browser})` : ''}: ${lastError.slice(0, 100)}`);
       }
+      lastError = stderr || stdout;
+      console.log(`[1/3] Attempt failed${browser ? ` (${browser})` : ''}: ${lastError.slice(0, 120)}`);
     }
 
     if (!downloaded) {
-      throw new Error(`Could not download post after all attempts. Make sure yt-dlp.exe is up to date and you are logged into TikTok/Instagram in Chrome or Edge.\n\nDetails: ${lastError.slice(0, 300)}`);
+      throw new Error(`Could not download post. Make sure yt-dlp.exe is up to date and you are logged into TikTok/Instagram in Chrome or Edge.\n\nDetails: ${lastError.slice(0, 300)}`);
     }
     console.log('[1/3] Download complete.');
 

@@ -14,6 +14,53 @@ app.use(express.static(__dirname));
 
 const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
 const TEMP_DIR = path.join(__dirname, 'temp');
+
+const BROWSER_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+// Scrape image URLs from a TikTok / Instagram post page
+async function scrapeImagesFromPage(url) {
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': BROWSER_UA,
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
+    redirect: 'follow',
+  });
+  if (!res.ok) throw new Error(`Failed to fetch page (${res.status})`);
+  const html = await res.text();
+
+  const urls = new Set();
+
+  // 1. og:image meta tags (cover + each slide on most platforms)
+  const ogRegex = /<meta[^>]+property=["']og:image(?::secure_url)?["'][^>]+content=["']([^"']+)["']/gi;
+  for (const m of html.matchAll(ogRegex)) urls.add(m[1]);
+
+  // 2. TikTok embeds slideshow URLs inside its hydration JSON
+  try {
+    const jsonMatch = html.match(/<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]+?)<\/script>/);
+    if (jsonMatch) {
+      const data = JSON.parse(jsonMatch[1]);
+      const item = data?.__DEFAULT_SCOPE__?.['webapp.video-detail']?.itemInfo?.itemStruct;
+      const images = item?.imagePost?.images || [];
+      for (const img of images) {
+        const candidate = img?.imageURL?.urlList?.[0] || img?.imageURL?.urlList?.find(Boolean);
+        if (candidate) urls.add(candidate);
+      }
+    }
+  } catch (_) {}
+
+  return [...urls].filter(u => /^https?:\/\//.test(u));
+}
+
+async function downloadImage(url, destPath) {
+  const res = await fetch(url, { headers: { 'User-Agent': BROWSER_UA }, redirect: 'follow' });
+  if (!res.ok) throw new Error(`Image fetch failed (${res.status})`);
+  const buffer = await res.buffer();
+  fs.writeFileSync(destPath, buffer);
+}
+
 const YTDLP = fs.existsSync(path.join(__dirname, 'yt-dlp.exe'))
   ? `"${path.join(__dirname, 'yt-dlp.exe')}"`
   : 'yt-dlp';
@@ -70,7 +117,27 @@ app.post('/api/analyze', async (req, res) => {
     }
 
     if (!downloaded) {
-      throw new Error(`Could not download post. Make sure yt-dlp.exe is up to date and you are logged into TikTok/Instagram in Chrome or Edge.\n\nDetails: ${lastError.slice(0, 300)}`);
+      // ── Fallback: scrape page directly (TikTok photo posts etc.) ──
+      console.log('[1/3] yt-dlp failed — falling back to page scraper...');
+      try {
+        const imageUrls = await scrapeImagesFromPage(url);
+        if (!imageUrls.length) throw new Error('No images found on page.');
+        console.log(`[1/3] Scraper found ${imageUrls.length} image(s). Downloading...`);
+
+        let i = 0;
+        for (const imgUrl of imageUrls.slice(0, 8)) {
+          const destPath = path.join(TEMP_DIR, `${sessionId}_scrape_${i}.jpg`);
+          try {
+            await downloadImage(imgUrl, destPath);
+            i++;
+          } catch (e) {
+            console.log(`  skip image ${i}: ${e.message}`);
+          }
+        }
+        downloaded = i > 0;
+      } catch (e) {
+        throw new Error(`Could not download post. Both yt-dlp and the page scraper failed.\n\nyt-dlp: ${lastError.slice(0, 200)}\nScraper: ${e.message}`);
+      }
     }
     console.log('[1/3] Download complete.');
 
@@ -204,5 +271,12 @@ app.post('/api/generate-image', async (req, res) => {
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`\n  HabitAI Marketing System`);
-  console.log(`  Running at http://localhost:${PORT}\n`);
+  console.log(`  Running at http://localhost:${PORT}`);
+
+  try {
+    const ver = spawnSync(path.join(__dirname, 'yt-dlp.exe'), ['--version'], { encoding: 'utf8' });
+    console.log(`  yt-dlp version: ${(ver.stdout || ver.stderr || 'unknown').trim()}\n`);
+  } catch (_) {
+    console.log(`  yt-dlp version: unknown\n`);
+  }
 });

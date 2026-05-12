@@ -307,22 +307,24 @@ Each prompt MUST:
 - Look like a real iPhone-shot moment, vertical 9:16 portrait
 - Avoid any text overlays in the image itself
 
-Return ONLY a JSON array of exactly 4 prompt strings, no markdown:
-["scene 1 prompt", "scene 2 prompt", "scene 3 prompt", "scene 4 prompt"]`,
+Return EXACTLY in this format and nothing else (no markdown, no explanations):
+SCENE 1: <full prompt for scene 1 on one line>
+SCENE 2: <full prompt for scene 2 on one line>
+SCENE 3: <full prompt for scene 3 on one line>
+SCENE 4: <full prompt for scene 4 on one line>`,
       }],
     });
 
-    let raw = (sceneMsg.content[0]?.text || '').trim();
-    raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-    const arrMatch = raw.match(/\[[\s\S]*\]/);
-    if (arrMatch) raw = arrMatch[0];
+    const raw = (sceneMsg.content[0]?.text || '').trim();
+    // Split on SCENE N: markers — robust to quotes, dashes, commas in prompts
+    const parts = raw.split(/^\s*SCENE\s+\d+\s*:\s*/im).slice(1);
+    const prompts = parts.map(p => p.trim().replace(/\s+/g, ' ')).filter(Boolean);
 
-    let prompts;
-    try { prompts = JSON.parse(raw); } catch (e) {
-      console.error('[generate-content] could not parse prompts:', raw.slice(0, 300));
+    if (!prompts.length) {
+      console.error('[generate-content] could not parse prompts. Raw:\n' + raw.slice(0, 500));
       throw new Error('Could not parse scene prompts from Claude.');
     }
-    if (!Array.isArray(prompts) || !prompts.length) throw new Error('Scene prompt list was empty.');
+    console.log(`  Parsed ${prompts.length} scene prompt(s).`);
 
     console.log(`[2/2] Generating ${prompts.length} scene image(s)...`);
     const images = [];

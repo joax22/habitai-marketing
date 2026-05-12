@@ -3,9 +3,15 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
+const crypto = require('crypto');
 const Anthropic = require('@anthropic-ai/sdk');
 const fetch = require('node-fetch');
 const puppeteer = require('puppeteer');
+
+const TEMP_DIR = path.join(__dirname, 'temp');
+if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
+
+const hashOf = (buf) => crypto.createHash('sha1').update(buf).digest('hex');
 
 const app = express();
 app.use(cors());
@@ -57,61 +63,68 @@ async function capturePost(url) {
     await new Promise(r => setTimeout(r, 1500));
 
     const screenshots = [];
+    const seenHashes = new Set();
 
-    // Detect content type
+    const takeShot = async () => {
+      // Puppeteer 23+ returns Uint8Array — wrap in Buffer for reliable base64
+      const raw = await page.screenshot({ type: 'jpeg', quality: 75 });
+      const buf = Buffer.from(raw);
+      if (!buf || buf.length === 0) return null;
+      const h = hashOf(buf);
+      if (seenHashes.has(h)) return { duplicate: true };
+      seenHashes.add(h);
+      return { buf };
+    };
+
     const hasVideo = await page.evaluate(() => !!document.querySelector('video'));
 
     if (hasVideo) {
-      console.log('  → Video post — capturing 5 frames over time...');
+      console.log('  → Video post — capturing frames over time...');
       for (let i = 0; i < 5; i++) {
-        screenshots.push(await page.screenshot({ type: 'jpeg', quality: 85 }));
-        if (i < 4) await new Promise(r => setTimeout(r, 1500));
+        const r = await takeShot();
+        if (r && r.buf) screenshots.push(r.buf);
+        if (i < 4) await new Promise(rs => setTimeout(rs, 1500));
       }
     } else {
       console.log('  → Photo post — capturing slides...');
-      screenshots.push(await page.screenshot({ type: 'jpeg', quality: 85 }));
+      const first = await takeShot();
+      if (first && first.buf) screenshots.push(first.buf);
 
-      // Click / swipe through up to 8 slides
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 9; i++) {
         const advanced = await page.evaluate(() => {
           const selectors = [
             '[data-e2e="arrow-right"]',
             '[data-e2e="slideshow-arrow-right"]',
             'button[aria-label*="Next" i]',
-            'button[aria-label*="next" i]',
             '.swiper-button-next',
             '[class*="ArrowRight"]',
             '[class*="arrow-right"]',
           ];
           for (const sel of selectors) {
             const el = document.querySelector(sel);
-            if (el && !el.disabled) {
-              el.click();
-              return true;
-            }
+            if (el && !el.disabled) { el.click(); return true; }
           }
           return false;
         });
-
-        // Fallback to keyboard right arrow
         if (!advanced) {
           try { await page.keyboard.press('ArrowRight'); } catch (_) {}
         }
-
-        await new Promise(r => setTimeout(r, 900));
-        const shot = await page.screenshot({ type: 'jpeg', quality: 85 });
-
-        // Stop if last two screenshots are identical (reached end of slideshow)
-        if (screenshots.length > 0) {
-          const prev = screenshots[screenshots.length - 1];
-          if (Buffer.compare(prev, shot) === 0) {
-            console.log(`  → Reached end of slideshow at slide ${screenshots.length}.`);
-            break;
-          }
+        await new Promise(rs => setTimeout(rs, 900));
+        const r = await takeShot();
+        if (!r) continue;
+        if (r.duplicate) {
+          console.log(`  → No new slide detected — stopping at slide ${screenshots.length}.`);
+          break;
         }
-        screenshots.push(shot);
+        screenshots.push(r.buf);
       }
     }
+
+    // Persist to temp/ for debugging — gitignored
+    const stamp = Date.now();
+    screenshots.forEach((b, i) => {
+      try { fs.writeFileSync(path.join(TEMP_DIR, `shot_${stamp}_${i}.jpg`), b); } catch (_) {}
+    });
 
     return screenshots;
   } finally {
@@ -139,7 +152,7 @@ app.post('/api/analyze', async (req, res) => {
       source: {
         type: 'base64',
         media_type: 'image/jpeg',
-        data: buf.toString('base64'),
+        data: Buffer.from(buf).toString('base64'),
       },
     }));
 
@@ -166,10 +179,18 @@ Return ONLY valid JSON — no markdown, no extra text, no code blocks:
       }],
     });
 
+    let raw = (message.content[0]?.text || '').trim();
+    // Strip ```json ... ``` or ``` ... ``` fences if present
+    raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    // Pull the first {...} block as a last resort
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (jsonMatch) raw = jsonMatch[0];
+
     let result;
     try {
-      result = JSON.parse(message.content[0].text.trim());
-    } catch (_) {
+      result = JSON.parse(raw);
+    } catch (e) {
+      console.error('[analyze] could not parse Claude reply:', raw.slice(0, 300));
       throw new Error('Claude returned an unexpected response format.');
     }
 
